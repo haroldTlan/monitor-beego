@@ -34,4 +34,18 @@ func init() {
 			AllowHTTPMethods: []string{"delete"},
 			Params: nil})
 
+	beego.GlobalControllerRouter["last/controllers:TargetController"] = append(beego.GlobalControllerRouter["last/controllers:TargetController"],
+		beego.ControllerComments{
+			Method: "GetAll",
+			Router: `/`,
+			AllowHTTPMethods: []string{"get"},
+			Params: nil})
+
+	beego.GlobalControllerRouter["last/controllers:TargetController"] = append(beego.GlobalControllerRouter["last/controllers:TargetController"],
+		beego.ControllerComments{
+			Method: "Post",
+			Router: `/`,
+			AllowHTTPMethods: []string{"post"},
+			Params: nil})
+
 }

@@ -1,15 +1,35 @@
 package controllers
 
 import (
-	"encoding/json"
-	"facial/models"
-
 	"github.com/astaxie/beego"
+	"last/controllers/web"
+	"last/models"
 )
 
-// Operations about Users
-type UserController struct {
+// Operations about Targets
+type TargetController struct {
 	beego.Controller
+}
+
+// URLMapping ...
+func (t *TargetController) URLMapping() {
+	t.Mapping("GetAll", t.GetAll)
+	t.Mapping("Post", t.Post)
+	/*
+
+		l.Mapping("Put", l.Update)
+		l.Mapping("Delete", l.Delete)
+	*/
+}
+
+// @Title GetAll
+// @Description get all Targets
+// @Success 200 {object} models.Target
+// @router / [get]
+func (t *TargetController) GetAll() {
+	targets, err := models.GetAllTargets()
+	t.Data["json"] = web.NewResponse(targets, err)
+	t.ServeJSON()
 }
 
 // @Title CreateUser
@@ -18,13 +38,25 @@ type UserController struct {
 // @Success 200 {int} models.User.Id
 // @Failure 403 body is empty
 // @router / [post]
-func (u *UserController) Post() {
-	var user models.User
-	json.Unmarshal(u.Ctx.Input.RequestBody, &user)
-	uid := models.AddUser(user)
-	u.Data["json"] = map[string]string{"uid": uid}
-	u.ServeJSON()
+func (t *TargetController) Post() {
+	name := t.GetString("name")
+	identity := t.GetString("identity")
+	sex := t.GetString("sex")
+	nation := t.GetString("nation")
+	host := t.GetString("host")
+	message := t.GetString("message")
+	library, _ := t.GetInt64("library")
+	level, _ := t.GetInt64("level")
+	age, _ := t.GetInt64("age")
+	file, _, _ := t.GetFile("file")
+
+	err := models.AddTarget(name, identity, sex, nation, host, message, level, age, library, file)
+
+	t.Data["json"] = web.NewResponse("", err)
+	t.ServeJSON()
 }
+
+/*
 
 // @Title GetAll
 // @Description get all Users
@@ -116,3 +148,5 @@ func (u *UserController) Logout() {
 	u.Data["json"] = "logout success"
 	u.ServeJSON()
 }
+
+*/

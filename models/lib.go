@@ -10,13 +10,13 @@ import (
 )
 
 type Library struct {
-	Name    string     `orm:"column(name);size(255);pk"            json:"name"`
-	Id      int64      `orm:"column(id)"                           json:"id"`
-	Created time.Time  `orm:"column(created);type(datetime)"       json:"created"`
-	Updated time.Time  `orm:"column(updated);type(datetime)"       json:"updated"`
-	Role    string     `orm:"column(role);size(255)"               json:"role"`
-	Message string     `orm:"column(message);size(255)"            json:"message"`
-	Pics    []*Picture `orm:"column(Id);reverse(many)"               json:"picture"`
+	Id      int64     `orm:"column(id);pk"                           json:"id"`
+	Name    string    `orm:"column(name);size(255)"                  json:"name"`
+	Created time.Time `orm:"column(created);type(datetime)"          json:"created"`
+	Updated time.Time `orm:"column(updated);type(datetime)"          json:"updated"`
+	Role    string    `orm:"column(role);size(255)"                  json:"role"`
+	Message string    `orm:"column(message);size(255)"               json:"message"`
+	Pics    []*Target `orm:"column(Id);reverse(many)"                json:"picture"`
 }
 
 type ResLibrary struct {
@@ -33,6 +33,10 @@ type ResLibrary struct {
 
 func init() {
 	orm.RegisterModel(new(Library))
+}
+
+func NewLibrary() *Library {
+	return &Library{}
 }
 
 func (l *Library) TableName() string {
@@ -72,6 +76,7 @@ func GetAllLibrarys() (resLibs []ResLibrary, err error) {
 		res.PicCount = len(lib.Pics)
 		resLibs = append(resLibs, res)
 	}
+
 	return
 }
 
@@ -85,6 +90,7 @@ func AddLibrary(name, role, message string) (err error) {
 	l.Message = message
 	l.Created = time.Now()
 	l.Updated = time.Now()
+
 	if _, err = o.Insert(&l); err != nil {
 		return
 	}
@@ -130,6 +136,15 @@ func checkLibraryById(id int64) (err error) {
 		return
 	} else if num == 0 {
 		return errs.LibraryNotFound
+	}
+	return
+}
+
+func GetLibraryById(id int64) (l *Library, err error) {
+	o := orm.NewOrm()
+
+	if err = o.Raw("select * from librarys where id = ?", id).QueryRow(&l); err != nil {
+		return
 	}
 	return
 }

@@ -10,7 +10,7 @@ import (
 	"last/models"
 )
 
-// Librarys about object
+// Operations about Librarys
 type LibController struct {
 	beego.Controller
 }
@@ -26,7 +26,6 @@ func (l *LibController) URLMapping() {
 // @Title GetAll
 // @Description get all librarys
 // @Success 200 {object} models.Library
-// @Failure 403 :libId is empty
 // @router / [get]
 func (l *LibController) GetAll() {
 	res, err := models.GetAllLibrarys()
@@ -59,15 +58,12 @@ func (l *LibController) Post() {
 // @Failure 403 :objectId is empty
 // @router /:id [put]
 func (l *LibController) Update() {
-	var err error
-	defer func() {
-		l.Data["json"] = web.NewResponse("update success!", err)
-		l.ServeJSON()
-	}()
+	defer l.ServeJSON()
 
 	idStr := l.Ctx.Input.Param(":id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
+		l.Data["json"] = web.NewResponse("Failed!!", err)
 		return
 	}
 
@@ -76,6 +72,7 @@ func (l *LibController) Update() {
 	message := l.GetString("message")
 
 	err = models.UpdateLibrary(name, role, message, id)
+	l.Data["json"] = web.NewResponse("update success!", err)
 }
 
 // @Title Delete
@@ -85,16 +82,14 @@ func (l *LibController) Update() {
 // @Failure 403 Id is empty
 // @router /:id [delete]
 func (l *LibController) Delete() {
-	var err error
-	defer func() {
-		l.Data["json"] = web.NewResponse("", err)
-		l.ServeJSON()
-	}()
+	defer l.ServeJSON()
 
 	idStr := l.Ctx.Input.Param(":id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
+		l.Data["json"] = web.NewResponse("Delete Failed", err)
 		return
 	}
 	err = models.DelLibrary(id)
+	l.Data["json"] = web.NewResponse("Delete success!!!", err)
 }
