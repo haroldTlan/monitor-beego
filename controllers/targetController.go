@@ -1,59 +1,92 @@
 package controllers
 
 import (
-	"github.com/astaxie/beego"
-	"last/controllers/web"
-	"last/models"
+	"encoding/json"
+	"fmt"
+	"html/template"
+
+	"github.com/lifei6671/mindoc/models"
 )
 
 // Operations about Targets
 type TargetController struct {
-	beego.Controller
+	ManagerController
 }
 
 // URLMapping ...
 func (t *TargetController) URLMapping() {
-	t.Mapping("GetAll", t.GetAll)
-	t.Mapping("Post", t.Post)
-	/*
-
-		l.Mapping("Put", l.Update)
-		l.Mapping("Delete", l.Delete)
-	*/
+	t.Mapping("GetAll", t.Targets)
+	t.Mapping("Post", t.AddTarget)
+	t.Mapping("Post", t.UpdateTarget)
+	t.Mapping("Post", t.DelTarget)
 }
 
 // @Title GetAll
 // @Description get all Targets
 // @Success 200 {object} models.Target
 // @router / [get]
-func (t *TargetController) GetAll() {
-	targets, err := models.GetAllTargets()
-	t.Data["json"] = web.NewResponse(targets, err)
-	t.ServeJSON()
+func (t *TargetController) Targets() {
+	t.Prepare()
+	t.TplName = "manager/targets.tpl"
+
+	libId, _ := t.GetInt64(":lib")
+
+	lib, _ := models.NewLibrary().CheckLibraryById(libId)
+
+	targets, err := models.NewTarget().GetTargetByLib(libId)
+	fmt.Printf("%+v", targets)
+	b, err := json.Marshal(targets)
+
+	if err != nil {
+		t.Data["Results"] = template.JS("[]")
+	} else {
+		t.Data["Results"] = template.JS(string(b))
+	}
+
+	t.Data["Targets"] = targets
+	t.Data["Lib"] = lib
 }
 
-// @Title CreateUser
-// @Description create users
-// @Param	body		body 	models.User	true		"body for user content"
-// @Success 200 {int} models.User.Id
+// @Title CreateTarget
+// @Description create target
+// @Param	body		body 	models.Target	true		"body for target content"
+// @Success 200 {int} models.Target.Id
 // @Failure 403 body is empty
 // @router / [post]
-func (t *TargetController) Post() {
-	name := t.GetString("name")
-	identity := t.GetString("identity")
-	sex := t.GetString("sex")
-	nation := t.GetString("nation")
-	host := t.GetString("host")
-	message := t.GetString("message")
-	library, _ := t.GetInt64("library")
-	level, _ := t.GetInt64("level")
-	age, _ := t.GetInt64("age")
-	file, _, _ := t.GetFile("file")
+func (t *TargetController) AddTarget() {
+	target := models.NewTarget()
 
-	err := models.AddTarget(name, identity, sex, nation, host, message, level, age, library, file)
+	target.Name = t.GetString("name")
+	target.Identity = t.GetString("identity")
+	target.Sex = t.GetString("sex")
+	target.Nation = t.GetString("nation")
+	target.Host = t.GetString("host")
+	target.Message = t.GetString("description")
+	target.LibraryId, _ = t.GetInt64("library")
+	target.Level, _ = t.GetInt64("level")
+	target.Age, _ = t.GetInt64("age")
+	//file, _, _ := t.GetFile("file")
+	fmt.Printf("%+v", target)
+	t.JsonResult(0, "ok", target)
+}
 
-	t.Data["json"] = web.NewResponse("", err)
-	t.ServeJSON()
+// @Title Update
+// @Description update the target
+// @Param	uid		path 	string	true		"The id you want to update"
+// @Param	body		body 	models.Target	true		"body for target content"
+// @Success 200 {object} models.Target
+// @Failure 403 :id is not int
+// @router /:id [post]
+func (u *TargetController) UpdateTarget() {
+}
+
+// @Title Delete
+// @Description delete the target
+// @Param	id		path 	string	true		"The id you want to delete"
+// @Success 200 {string} delete success!
+// @Failure 403 id is empty
+// @router /:id [post]
+func (u *TargetController) DelTarget() {
 }
 
 /*
