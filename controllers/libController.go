@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/astaxie/beego/logs"
 	"github.com/lifei6671/mindoc/models"
 )
 
+// 希望接手的下一位，不要打我，都是前端的锅，我也是很累
 // Operations about Librarys
 type LibController struct {
 	ManagerController
@@ -52,21 +52,27 @@ func (l *LibController) Librarys() {
 // @router / [post]
 func (l *LibController) AddLibrary() {
 	name := strings.TrimSpace(l.GetString("name"))
-	role, _ := l.GetInt64("role")
+	if name == "" {
+		l.JsonResult(4000, "目标库名字不能为空")
+	}
+
+	role, err := l.GetInt64("role")
+	if err != nil {
+		l.JsonResult(4000, "请输入正确的目标库种类")
+	}
+
 	message := strings.TrimSpace(l.GetString("description"))
+	if len(message) >= 140 {
+		l.JsonResult(4000, "目标库备注长度不能超过140字")
+	}
 
 	library := models.NewLibrary()
-
 	if err := library.CheckLibraryByName(name); err != nil {
-		l.JsonResult(6006, err.Error())
+		l.JsonResult(4000, err.Error())
 	}
 
 	if role != 0 && role != 1 && role != 2 {
 		role = 1
-	}
-
-	if len(message) > 100 {
-		l.JsonResult(6006, "备注超过100字")
 	}
 
 	library.Name = name
@@ -74,7 +80,7 @@ func (l *LibController) AddLibrary() {
 	library.Message = message
 
 	if err := library.AddLibrary(); err != nil {
-		l.JsonResult(6006, err.Error())
+		l.JsonResult(4000, "添加目标库失败", err)
 	}
 
 	l.JsonResult(0, "ok", library)
@@ -92,8 +98,7 @@ func (l *LibController) UpdateLibrary() {
 	l.Prepare()
 	l.TplName = "manager/edit_librarys.tpl"
 
-	id, err := l.GetInt64(":id", 0)
-
+	id, err := l.GetInt64(":id")
 	if id <= 0 || err != nil {
 		l.Abort("404")
 	}
@@ -102,11 +107,14 @@ func (l *LibController) UpdateLibrary() {
 
 	if l.Ctx.Input.IsPost() {
 		name := strings.TrimSpace(l.GetString("name"))
-		role, _ := l.GetInt64("role")
+		role, err := l.GetInt64("role")
+		if err != nil {
+			l.JsonResult(4000, "请输入正确的目标库种类")
+		}
 		message := strings.TrimSpace(l.GetString("description"))
 
 		if err := library.CheckLibraryByName(name); err != nil {
-			l.JsonResult(6006, err.Error())
+			l.JsonResult(4000, err.Error())
 		}
 
 		if role != 0 && role != 1 && role != 2 {
@@ -114,7 +122,7 @@ func (l *LibController) UpdateLibrary() {
 		}
 
 		if len(message) > 100 {
-			l.JsonResult(6006, "备注超过100字")
+			l.JsonResult(4000, "备注超过100字")
 		}
 
 		library.Name = name
@@ -122,8 +130,7 @@ func (l *LibController) UpdateLibrary() {
 		library.Message = message
 
 		if err = library.UpdateLibrary(); err != nil {
-			logs.Error(err)
-			l.JsonResult(6004, "保存失败")
+			l.JsonResult(4000, "保存失败", err)
 		}
 
 		l.JsonResult(0, "ok")
@@ -142,12 +149,11 @@ func (l *LibController) DelLibrary() {
 
 	library, err := models.NewLibrary().CheckLibraryById(id)
 	if err != nil {
-		l.JsonResult(6003, "不存在目标库 "+strconv.FormatInt(id, 10))
+		l.JsonResult(4000, "不存在的目标库ID: "+strconv.FormatInt(id, 10))
 	}
 
 	if err = library.DelLibrary(); err != nil {
-		logs.Error("删除目标 => ", err)
-		l.JsonResult(6003, "删除失败")
+		l.JsonResult(4000, "删除失败", err)
 	}
 	l.JsonResult(0, "ok")
 }

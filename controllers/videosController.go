@@ -55,6 +55,7 @@ func (v *VideosController) AddVideo() {
 	roleId, _ := v.GetInt64("role")
 	message := v.GetString("description")
 
+	fmt.Println(name, url, roleId, message)
 	video := models.NewVideo()
 
 	video.Name = name
@@ -62,7 +63,7 @@ func (v *VideosController) AddVideo() {
 	video.RoleId = roleId
 	video.Message = message
 	if err := video.AddVideo(); err != nil {
-		v.JsonResult(6006, err.Error())
+		v.JsonResult(4003, err.Error())
 	}
 
 	v.JsonResult(0, "ok", video)
@@ -100,6 +101,7 @@ func (v *VideosController) UpdateVideo() {
 
 		v.JsonResult(0, "ok")
 	}
+
 	v.Data["Video"] = video
 }
 
@@ -108,7 +110,7 @@ func (v *VideosController) UpdateVideo() {
 // @Param	video		path 	string	true		"The video id you want to delete"
 // @Success 200 {string} delete success!
 // @Failure 403 Id is empty
-// @router /:id [delete]
+// @router / [post]
 func (v *VideosController) DelVideo() {
 	idStr := v.GetString("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

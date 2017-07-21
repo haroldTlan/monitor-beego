@@ -4,13 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
+	"os"
+	"strconv"
 
+	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/logs"
+	"github.com/lifei6671/mindoc/controllers/web"
 	"github.com/lifei6671/mindoc/models"
 )
 
 // Operations about Targets
 type TargetController struct {
-	ManagerController
+	beego.Controller
 }
 
 // URLMapping ...
@@ -26,15 +32,13 @@ func (t *TargetController) URLMapping() {
 // @Success 200 {object} models.Target
 // @router / [get]
 func (t *TargetController) Targets() {
-	t.Prepare()
 	t.TplName = "manager/targets.tpl"
 
-	libId, _ := t.GetInt64(":lib")
-
+	libId, err := t.GetInt64(":lib")
 	lib, _ := models.NewLibrary().CheckLibraryById(libId)
 
 	targets, err := models.NewTarget().GetTargetByLib(libId)
-	fmt.Printf("%+v", targets)
+	fmt.Printf("%+v", targets[0].Pictures[0])
 	b, err := json.Marshal(targets)
 
 	if err != nil {
@@ -47,6 +51,19 @@ func (t *TargetController) Targets() {
 	t.Data["Lib"] = lib
 }
 
+// @Title Get Targets  Json
+// @Description get all Targets
+// @Success 200 {object} models.Target
+// @router / [get]
+func (t *TargetController) TargetJson() {
+	libId, err := t.GetInt64(":lib")
+
+	targets, err := models.NewTarget().GetTargetByLib(libId)
+
+	t.Data["json"] = web.NewResponse(targets, err)
+	t.ServeJSON()
+}
+
 // @Title CreateTarget
 // @Description create target
 // @Param	body		body 	models.Target	true		"body for target content"
@@ -54,19 +71,74 @@ func (t *TargetController) Targets() {
 // @Failure 403 body is empty
 // @router / [post]
 func (t *TargetController) AddTarget() {
-	target := models.NewTarget()
+	fmt.Printf("\ntarget:\n%+v", 123)
+	libId, err := t.GetInt64("id")
+	if libId < 0 || err != nil {
+		t.Abort("404")
+	}
+	fmt.Printf("\ntarget:\n%+v", libId)
+	if libId == 0 {
+		libId = 1
+	}
 
-	target.Name = t.GetString("name")
-	target.Identity = t.GetString("identity")
-	target.Sex = t.GetString("sex")
-	target.Nation = t.GetString("nation")
-	target.Host = t.GetString("host")
-	target.Message = t.GetString("description")
-	target.LibraryId, _ = t.GetInt64("library")
-	target.Level, _ = t.GetInt64("level")
-	target.Age, _ = t.GetInt64("age")
-	//file, _, _ := t.GetFile("file")
-	fmt.Printf("%+v", target)
+	defer func() {
+		if err != nil {
+			logs.Error(err)
+		}
+	}()
+
+	name := t.GetString("name")
+	if name == "" {
+		t.JsonResult(4001, "目标名字不能为空")
+	}
+
+	age, err := t.GetInt64("age")
+	if age > 140 || err != nil {
+		t.JsonResult(4001, "请输入正确的年龄")
+	}
+	identity := t.GetString("identity")
+
+	gender := t.GetString("gender")
+	if gender != "male" && gender != "female" {
+		t.JsonResult(4001, "请输入正确的性别")
+	}
+
+	nation := t.GetString("nation")       //民族
+	host := t.GetString("host")           //籍贯
+	message := t.GetString("description") //备注
+
+	level, err := t.GetInt64("level")
+	if level != 1 && level != 2 || err != nil {
+		t.JsonResult(4001, "请输入正确的级别")
+	}
+
+	target := models.NewTarget()
+	target.Name = name
+	target.Identity = identity
+	target.Gender = gender
+	target.Level = level
+	target.Age = age
+	target.Nation = nation
+	target.Host = host
+	target.Message = message
+	target.LibraryId = libId
+
+	if _, err := target.LookUp(map[string]interface{}{"name": name}); err == nil {
+		t.JsonResult(4001, "目标名字已存在")
+	}
+
+	// Photos
+	photoStr := t.Input().Get("photo")
+	var ps []models.Photo
+	if err := json.Unmarshal([]byte(photoStr), &ps); err != nil {
+		t.JsonResult(4001, err.Error())
+	}
+
+	fmt.Printf("\ntarget:\n%+v", target)
+	if err := target.AddTarget(ps); err != nil {
+		t.JsonResult(4001, err.Error())
+	}
+
 	t.JsonResult(0, "ok", target)
 }
 
@@ -76,8 +148,70 @@ func (t *TargetController) AddTarget() {
 // @Param	body		body 	models.Target	true		"body for target content"
 // @Success 200 {object} models.Target
 // @Failure 403 :id is not int
-// @router /:id [post]
-func (u *TargetController) UpdateTarget() {
+// @router / [post]
+func (t *TargetController) UpdateTarget() {
+	libId, err := t.GetInt64(":lib")
+	if libId <= 0 || err != nil {
+		t.Abort("404")
+	}
+
+	defer func() {
+		if err != nil {
+			logs.Error(err)
+		}
+	}()
+
+	name := t.GetString("name")
+	if name == "" {
+		t.JsonResult(4001, "目标名字不能为空")
+	}
+
+	age, err := t.GetInt64("age")
+	if age > 140 || err != nil {
+		t.JsonResult(4001, "请输入正确的年龄")
+	}
+	identity := t.GetString("identity")
+
+	gender := t.GetString("gender")
+	if gender != "male" && gender != "female" {
+		t.JsonResult(4001, "请输入正确的性别")
+	}
+
+	nation := t.GetString("nation")       // 民族
+	host := t.GetString("host")           //籍贯
+	message := t.GetString("description") //备注
+
+	level, err := t.GetInt64("level")
+	if level != 1 && level != 2 || err != nil {
+		t.JsonResult(4001, "请输入正确的级别")
+	}
+
+	target := models.NewTarget()
+	target.Name = name
+	target.Identity = identity
+	target.Gender = gender
+	target.Level = level
+	target.Age = age
+	target.Nation = nation
+	target.Host = host
+	target.Message = message
+
+	if _, err := target.LookUp(map[string]interface{}{"name": name}); err == nil {
+		t.JsonResult(4001, "目标名字已存在")
+	}
+
+	// Photos
+	photoStr := t.Input().Get("photo")
+	var ps []models.Photo
+	if err := json.Unmarshal([]byte(photoStr), &ps); err != nil {
+		t.JsonResult(4001, err.Error())
+	}
+
+	if err := target.UpdateTarget(ps); err != nil {
+		t.JsonResult(4001, err.Error())
+	}
+
+	t.JsonResult(0, "ok", target)
 }
 
 // @Title Delete
@@ -85,101 +219,100 @@ func (u *TargetController) UpdateTarget() {
 // @Param	id		path 	string	true		"The id you want to delete"
 // @Success 200 {string} delete success!
 // @Failure 403 id is empty
-// @router /:id [post]
-func (u *TargetController) DelTarget() {
+// @router / [post]
+func (t *TargetController) DelTarget() {
+	idStr := t.GetString("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+
+		return
+	}
+
+	if err = models.NewTarget().DelTarget(id); err != nil {
+		logs.Error("删除目标 => ", err)
+		t.JsonResult(4001, "删除失败", err)
+	}
+	t.JsonResult(0, "ok")
 }
 
-/*
+// Upload picture
+// 1,Get Feature
+// 2,copy to uploads/facial/
+// 3,return fileName and fileUrl and feature
+func (t *TargetController) UploadTarget() {
+	t.Prepare()
+	_, header, _ := t.GetFile("file")
 
-// @Title GetAll
-// @Description get all Users
-// @Success 200 {object} models.User
-// @router / [get]
-func (u *UserController) GetAll() {
-	users := models.GetAllUsers()
-	u.Data["json"] = users
-	u.ServeJSON()
-}
+	path, err := os.Create("/tmp/feat.jpg")
+	defer path.Close()
 
-// @Title Get
-// @Description get user by uid
-// @Param	uid		path 	string	true		"The key for staticblock"
-// @Success 200 {object} models.User
-// @Failure 403 :uid is empty
-// @router /:uid [get]
-func (u *UserController) Get() {
-	uid := u.GetString(":uid")
-	if uid != "" {
-		user, err := models.GetUser(uid)
+	file, err := header.Open()
+	defer file.Close()
+	if err != nil {
+	}
+
+	if _, err := io.Copy(path, file); err != nil {
+	}
+
+	fid, err := models.GetFeature()
+	if err != nil {
+		data, err := models.CopyFileOnFacial("failed", header, fid)
 		if err != nil {
-			u.Data["json"] = err.Error()
-		} else {
-			u.Data["json"] = user
+		}
+		t.JsonResult(6003, "failed", data)
+	}
+
+	data, err := models.CopyFileOnFacial("success", header, fid)
+	if err != nil {
+		t.JsonResult(6003, err.Error())
+	}
+
+	t.JsonResult(0, "ok", data)
+}
+
+func (t *TargetController) UploadTemp() {
+	files, err := t.GetFiles("fileList")
+
+	for i, _ := range files {
+		file, err := files[i].Open()
+		defer file.Close()
+		if err != nil {
+		}
+
+		path, err := os.Create("uploads/facial/" + files[i].Filename)
+		defer path.Close()
+		if err != nil {
+		}
+
+		if _, err := io.Copy(path, file); err != nil {
 		}
 	}
-	u.ServeJSON()
+
+	t.Data["Temp"] = "hoho"
+	t.JsonResult(0, "ok", err)
+
 }
 
-// @Title Update
-// @Description update the user
-// @Param	uid		path 	string	true		"The uid you want to update"
-// @Param	body		body 	models.User	true		"body for user content"
-// @Success 200 {object} models.User
-// @Failure 403 :uid is not int
-// @router /:uid [put]
-func (u *UserController) Put() {
-	uid := u.GetString(":uid")
-	if uid != "" {
-		var user models.User
-		json.Unmarshal(u.Ctx.Input.RequestBody, &user)
-		uu, err := models.UpdateUser(uid, &user)
-		if err != nil {
-			u.Data["json"] = err.Error()
-		} else {
-			u.Data["json"] = uu
-		}
+// JsonResult 响应 json 结果
+func (c *TargetController) JsonResult(errCode int, errMsg string, data ...interface{}) {
+	jsonData := make(map[string]interface{}, 3)
+
+	jsonData["errcode"] = errCode
+	jsonData["message"] = errMsg
+
+	if len(data) > 0 && data[0] != nil {
+		jsonData["data"] = data[0]
 	}
-	u.ServeJSON()
-}
 
-// @Title Delete
-// @Description delete the user
-// @Param	uid		path 	string	true		"The uid you want to delete"
-// @Success 200 {string} delete success!
-// @Failure 403 uid is empty
-// @router /:uid [delete]
-func (u *UserController) Delete() {
-	uid := u.GetString(":uid")
-	models.DeleteUser(uid)
-	u.Data["json"] = "delete success!"
-	u.ServeJSON()
-}
+	returnJSON, err := json.Marshal(jsonData)
 
-// @Title Login
-// @Description Logs user into the system
-// @Param	username		query 	string	true		"The username for login"
-// @Param	password		query 	string	true		"The password for login"
-// @Success 200 {string} login success
-// @Failure 403 user not exist
-// @router /login [get]
-func (u *UserController) Login() {
-	username := u.GetString("username")
-	password := u.GetString("password")
-	if models.Login(username, password) {
-		u.Data["json"] = "login success"
-	} else {
-		u.Data["json"] = "user not exist"
+	if err != nil {
+		beego.Error(err)
 	}
-	u.ServeJSON()
-}
 
-// @Title logout
-// @Description Logs out current logged in user session
-// @Success 200 {string} logout success
-// @router /logout [get]
-func (u *UserController) Logout() {
-	u.Data["json"] = "logout success"
-	u.ServeJSON()
-}
+	c.Ctx.ResponseWriter.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-*/
+	io.WriteString(c.Ctx.ResponseWriter, string(returnJSON))
+
+	c.StopRun()
+}
