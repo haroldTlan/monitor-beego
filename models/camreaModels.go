@@ -6,7 +6,6 @@ import (
 
 	"github.com/astaxie/beego/logs"
 	"github.com/astaxie/beego/orm"
-	"github.com/lifei6671/mindoc/conf"
 	"github.com/lifei6671/mindoc/errs"
 	"github.com/lifei6671/mindoc/utils"
 )
@@ -66,12 +65,11 @@ func (c *Camera) AddVideo() (err error) {
 }
 
 func OpenRtspStream(url string) (err error) {
-	fmt.Println(conf.InstallFilePath)
 	fmt.Printf(url)
 	name := "rtspstream"
 	var cmd []string
 	cmd = append(cmd, url, "1", "0.001")
-	o, err := utils.Execute(conf.InstallFilePath, conf.InstallFilePath+name, cmd, true)
+	o, err := utils.Execute(InstallFilePath, InstallFilePath+name, cmd, true)
 	fmt.Println(o, err)
 	return
 }

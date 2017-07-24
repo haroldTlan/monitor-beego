@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
 	"github.com/astaxie/beego/orm"
+	"github.com/lifei6671/mindoc/conf"
 	"github.com/lifei6671/mindoc/errs"
 	"github.com/lifei6671/mindoc/utils"
 )
@@ -22,7 +24,6 @@ type Target struct {
 	Created     time.Time  `orm:"column(created);type(datetime)"    json:"created"`
 	Updated     time.Time  `orm:"column(updated);type(datetime)"    json:"updated"`
 	Identity    string     `orm:"column(identity);size(255)"        json:"identity"`
-	Url         string     `orm:"column(url);size(255)"             json:"url"`
 	Gender      string     `orm:"column(sex);size(255)"             json:"gender"`
 	Level       int64      `orm:"column(level)"                     json:"level"`
 	Age         int64      `orm:"column(age)"                       json:"age"`
@@ -33,6 +34,7 @@ type Target struct {
 	Pictures    []*Picture `orm:"column(Id);reverse(many)"          json:"pictures"`
 	LibraryName string     `orm:"-"                                 json:"libraryName"`
 	LibraryId   int64      `orm:"-"                                 json:"libraryId"`
+	Url         string     `orm:"-"                                 json:"url"`
 	/*
 		LibraryId int64     `orm:"-"                                 json:"libraryId"`
 		LibraryName string     `orm:"-"                                 json:"libraryName"`
@@ -66,6 +68,7 @@ type DataPic struct {
 }
 
 var (
+	InstallFilePath  = beego.AppConfig.String("InstallFilePath")
 	WorkingDirectory = ""
 )
 
@@ -111,6 +114,15 @@ func (t *Target) GetTargetByLib(libId int64) (ts []Target, err error) {
 			return
 		}
 
+		if len(t.Pictures) > 0 {
+			if _, err = os.Stat(conf.InstallFilePath + "/mindoc" + t.Pictures[0].Url); err == nil {
+				t.Url = t.Pictures[0].Url
+			} else {
+				t.Url = "/uploads/none.svg"
+			}
+		} else {
+			t.Url = "/uploads/none.svg"
+		}
 		ts[i] = t
 	}
 	return
@@ -169,11 +181,36 @@ func (t *Target) LookUp(item map[string]interface{}) (target Target, err error) 
 			if err = o.QueryTable(new(Target)).Filter(k, v).One(&target); err != nil {
 				return
 			}
+		case "id":
+			if exist := o.QueryTable(new(Target)).Filter(k, v).Exist(); !exist {
+				err = fmt.Errorf("not exist")
+				return
+			}
+			if err = o.QueryTable(new(Target)).Filter(k, v).One(&target); err != nil {
+				return
+			}
+
 		}
+	}
+
+	if target.Library == nil {
+		target.LibraryName = ""
+		err = errs.NotInAnyLibrary
+		return
+	} else {
+		if _, err = o.LoadRelated(&target, "Library"); err != nil {
+			return
+		}
+		target.LibraryName = target.Library.Name
+		target.LibraryId = target.Library.Id
+	}
+	if _, err = o.LoadRelated(&target, "Pictures"); err != nil {
+		return
 	}
 	return
 }
 
+// POST
 // UPDATE
 func (t *Target) UpdateTarget(photos []Photo) (err error) {
 	o := orm.NewOrm()
@@ -184,53 +221,47 @@ func (t *Target) UpdateTarget(photos []Photo) (err error) {
 		}
 	}()
 
-	if _, err = o.LoadRelated(&t, "Library"); err != nil {
+	if _, err = o.LoadRelated(t, "Library"); err != nil {
 		return
 	}
-	if _, err = o.LoadRelated(&t, "Pictures"); err != nil {
+	if _, err = o.LoadRelated(t, "Pictures"); err != nil {
 		return
 	}
 
+	pictureDB := make(map[string]bool, 0)
 	for _, p := range t.Pictures {
-		for _, nowP := range photos {
-			if p.Feature == nowP.Feature {
-				continue
-			}
-		}
-		p.DelPicture()
+		pictureDB[p.Feature] = false
 	}
 
-	for _, photo := range photos {
-		p, err := NewPicture().LookUp(map[string]interface{}{"feature": photo.Feature})
-		if err.Error() == "not exist" {
-			p.Url = photo.Url
-			p.Feature = photo.Feature
+	for _, p := range photos {
+		if _, ok := pictureDB[p.Feature]; ok {
+			pictureDB[p.Feature] = true
+		} else {
+			fmt.Println("create New:", p.Feature)
+			newP, err := NewPicture().LookUp(map[string]interface{}{"feature": p.Feature})
+			fmt.Println(err)
+			newP.Url = p.Url
+			newP.Feature = p.Feature
 			target, _ := t.LookUp(map[string]interface{}{"name": t.Name})
-			p.Target = &target
-			p.Library = t.Library
-			p.AddPicture()
-
+			newP.Target = &target
+			newP.Library = t.Library
+			newP.AddPicture()
 		}
 	}
 
-	/*
-		var newPs []Picture
-		for _, photo := range photos {
-			p, err := NewPicture().LookUp(map[string]interface{}{"feature": photo.Feature})
-			if err.Error() == "not exist" {
-				p.Url = photo.Url
-				p.Feature = photo.Feature
-				target, _ := t.LookUp(map[string]interface{}{"name": t.Name})
-				p.Target = &target
-				p.Library = t.Library
-				newPs = append(newPs, p)
-				continue
-			} else if err != nil {
+	for k, v := range pictureDB {
+		if !v {
+			oldP, err := NewPicture().LookUp(map[string]interface{}{"feature": k})
+			fmt.Println("delete:", oldP.Url)
+			if err != nil {
 				return err
 			}
-			newPs = append(newPs, p)
+			if _, err = o.QueryTable(new(Similar)).Filter("picture_id", oldP.Id).Delete(); err != nil {
+				return err
+			}
+			oldP.DelPicture()
 		}
-	*/
+	}
 
 	t.Updated = time.Now()
 
@@ -242,8 +273,20 @@ func (t *Target) UpdateTarget(photos []Photo) (err error) {
 }
 
 // DELETE
-func (t *Target) DelTarget(id int64) (err error) {
+func (t *Target) DelTarget() (err error) {
 	o := orm.NewOrm()
+
+	fmt.Printf("%+v", t)
+	if _, err = o.LoadRelated(t, "Pictures"); err != nil {
+		return
+	}
+
+	for _, p := range t.Pictures {
+		if _, err = o.QueryTable(new(Similar)).Filter("picture_id", p.Id).Delete(); err != nil {
+			return
+		}
+		p.DelPicture()
+	}
 
 	if _, err = o.Delete(t); err != nil {
 		logs.Error(err)
@@ -277,7 +320,7 @@ func GetFeature() (res Feature, err error) {
 
 	var cmd []string
 	cmd = append(cmd, "getfeature.py", path)
-	filepath := "/home/administrator/lib/build_SampleApp_Release"
+	filepath := InstallFilePath
 	name := "python"
 
 	o, err := utils.Execute(filepath, name, cmd, true)
