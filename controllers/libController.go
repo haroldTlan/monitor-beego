@@ -71,7 +71,7 @@ func (l *LibController) AddLibrary() {
 		l.JsonResult(4000, err.Error())
 	}
 
-	if role != 0 && role != 1 && role != 2 {
+	if role != 3 || role != 1 || role != 2 {
 		role = 1
 	}
 

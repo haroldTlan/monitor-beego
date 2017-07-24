@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
 	"github.com/lifei6671/mindoc/controllers/web"
 	"github.com/lifei6671/mindoc/models"
@@ -16,7 +15,7 @@ import (
 
 // Operations about Targets
 type TargetController struct {
-	beego.Controller
+	ManagerController
 }
 
 // URLMapping ...
@@ -38,7 +37,6 @@ func (t *TargetController) Targets() {
 	lib, _ := models.NewLibrary().CheckLibraryById(libId)
 
 	targets, err := models.NewTarget().GetTargetByLib(libId)
-	fmt.Printf("%+v", targets[0].Pictures[0])
 	b, err := json.Marshal(targets)
 
 	if err != nil {
@@ -71,12 +69,11 @@ func (t *TargetController) TargetJson() {
 // @Failure 403 body is empty
 // @router / [post]
 func (t *TargetController) AddTarget() {
-	fmt.Printf("\ntarget:\n%+v", 123)
 	libId, err := t.GetInt64("id")
 	if libId < 0 || err != nil {
 		t.Abort("404")
 	}
-	fmt.Printf("\ntarget:\n%+v", libId)
+
 	if libId == 0 {
 		libId = 1
 	}
@@ -134,7 +131,6 @@ func (t *TargetController) AddTarget() {
 		t.JsonResult(4001, err.Error())
 	}
 
-	fmt.Printf("\ntarget:\n%+v", target)
 	if err := target.AddTarget(ps); err != nil {
 		t.JsonResult(4001, err.Error())
 	}
@@ -150,8 +146,14 @@ func (t *TargetController) AddTarget() {
 // @Failure 403 :id is not int
 // @router / [post]
 func (t *TargetController) UpdateTarget() {
+	t.TplName = "manager/edit_targets.tpl"
+	id, err := t.GetInt64(":id")
+	if id <= 0 || err != nil {
+		t.Abort("404")
+	}
+
 	libId, err := t.GetInt64(":lib")
-	if libId <= 0 || err != nil {
+	if id <= 0 || err != nil {
 		t.Abort("404")
 	}
 
@@ -161,57 +163,64 @@ func (t *TargetController) UpdateTarget() {
 		}
 	}()
 
-	name := t.GetString("name")
-	if name == "" {
-		t.JsonResult(4001, "目标名字不能为空")
+	target, err := models.NewTarget().LookUp(map[string]interface{}{"id": id})
+
+	if t.Ctx.Input.IsPost() {
+		name := t.GetString("name")
+		if name == "" {
+			t.JsonResult(4001, "目标名字不能为空")
+		}
+
+		age, err := t.GetInt64("age")
+		if age > 140 || err != nil {
+			t.JsonResult(4001, "请输入正确的年龄")
+		}
+		identity := t.GetString("identity")
+
+		gender := t.GetString("gender")
+		if gender != "male" && gender != "female" {
+			t.JsonResult(4001, "请输入正确的性别")
+		}
+
+		nation := t.GetString("nation")       // 民族
+		host := t.GetString("host")           //籍贯
+		message := t.GetString("description") //备注
+
+		level, err := t.GetInt64("level")
+		if level != 1 && level != 2 || err != nil {
+			t.JsonResult(4001, "请输入正确的级别")
+		}
+
+		target, _ := models.NewTarget().LookUp(map[string]interface{}{"id": id})
+		target.Name = name
+		target.Identity = identity
+		target.Gender = gender
+		target.Level = level
+		target.Age = age
+		target.Nation = nation
+		target.Host = host
+		target.Message = message
+		target.LibraryId = libId
+
+		// Photos
+		photoStr := t.Input().Get("pictures")
+		var ps []models.Photo
+		if err := json.Unmarshal([]byte(photoStr), &ps); err != nil {
+			t.JsonResult(4001, err.Error())
+		}
+
+		if err := target.UpdateTarget(ps); err != nil {
+			t.JsonResult(4001, err.Error())
+		}
+
+		t.JsonResult(0, "ok", target)
 	}
 
-	age, err := t.GetInt64("age")
-	if age > 140 || err != nil {
-		t.JsonResult(4001, "请输入正确的年龄")
-	}
-	identity := t.GetString("identity")
-
-	gender := t.GetString("gender")
-	if gender != "male" && gender != "female" {
-		t.JsonResult(4001, "请输入正确的性别")
-	}
-
-	nation := t.GetString("nation")       // 民族
-	host := t.GetString("host")           //籍贯
-	message := t.GetString("description") //备注
-
-	level, err := t.GetInt64("level")
-	if level != 1 && level != 2 || err != nil {
-		t.JsonResult(4001, "请输入正确的级别")
-	}
-
-	target := models.NewTarget()
-	target.Name = name
-	target.Identity = identity
-	target.Gender = gender
-	target.Level = level
-	target.Age = age
-	target.Nation = nation
-	target.Host = host
-	target.Message = message
-
-	if _, err := target.LookUp(map[string]interface{}{"name": name}); err == nil {
-		t.JsonResult(4001, "目标名字已存在")
-	}
-
-	// Photos
-	photoStr := t.Input().Get("photo")
-	var ps []models.Photo
-	if err := json.Unmarshal([]byte(photoStr), &ps); err != nil {
-		t.JsonResult(4001, err.Error())
-	}
-
-	if err := target.UpdateTarget(ps); err != nil {
-		t.JsonResult(4001, err.Error())
-	}
-
-	t.JsonResult(0, "ok", target)
+	fmt.Printf("???target:%+v\n\n", t.Ctx.Request)
+	fmt.Printf("???target:%+v,%+v\n\n", libId, target)
+	fmt.Printf("Pictures:%+v\n\n", target.Pictures)
+	fmt.Printf("Pictures:%+v\n\n", target.Pictures[0])
+	t.Data["Target"] = target
 }
 
 // @Title Delete
@@ -228,7 +237,9 @@ func (t *TargetController) DelTarget() {
 		return
 	}
 
-	if err = models.NewTarget().DelTarget(id); err != nil {
+	target, _ := models.NewTarget().LookUp(map[string]interface{}{"id": id})
+
+	if err = target.DelTarget(); err != nil {
 		logs.Error("删除目标 => ", err)
 		t.JsonResult(4001, "删除失败", err)
 	}
@@ -291,28 +302,4 @@ func (t *TargetController) UploadTemp() {
 	t.Data["Temp"] = "hoho"
 	t.JsonResult(0, "ok", err)
 
-}
-
-// JsonResult 响应 json 结果
-func (c *TargetController) JsonResult(errCode int, errMsg string, data ...interface{}) {
-	jsonData := make(map[string]interface{}, 3)
-
-	jsonData["errcode"] = errCode
-	jsonData["message"] = errMsg
-
-	if len(data) > 0 && data[0] != nil {
-		jsonData["data"] = data[0]
-	}
-
-	returnJSON, err := json.Marshal(jsonData)
-
-	if err != nil {
-		beego.Error(err)
-	}
-
-	c.Ctx.ResponseWriter.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	io.WriteString(c.Ctx.ResponseWriter, string(returnJSON))
-
-	c.StopRun()
 }

@@ -76,7 +76,7 @@ func (v *VideosController) AddVideo() {
 // @Param	message		path 	string	true		"The message you want to update"
 // @Success 200 {object} models.UpdateLib
 // @Failure 403 :objectId is empty
-// @router /:id [put]
+// @router /:id [post]
 func (v *VideosController) UpdateVideo() {
 	v.Prepare()
 	v.TplName = "manager/edit_videos.tpl"
@@ -90,6 +90,7 @@ func (v *VideosController) UpdateVideo() {
 	video, err := models.NewVideo().CheckVideoById(id)
 
 	if v.Ctx.Input.IsPost() {
+
 		video.Name = v.GetString("name")
 		video.RoleId, _ = v.GetInt64("role")
 		video.Message = v.GetString("description")
@@ -118,7 +119,6 @@ func (v *VideosController) DelVideo() {
 		return
 	}
 
-	fmt.Println(id)
 	err = models.DelVideo(id)
 	if err != nil {
 		logs.Error("删除目标 => ", err)
